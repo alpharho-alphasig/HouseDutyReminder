@@ -11,7 +11,7 @@ import json
 # If you're updating this script for the new semester, change these two variables!
 folderPath = Path(
     "/zpool/docker/volumes/nextcloud_aio_nextcloud_data/_data/admin/files/"
-    "NewDrive/ALPHA SIG GENERAL/02_COMMITTEES/07_HOUSING/WEEKLY DUTIES/2023_FALL")
+    "NewDrive/ALPHA SIG GENERAL/02_COMMITTEES/07_HOUSING/WEEKLY DUTIES/2024_SPRING")
 houseResidents = {
     "741": "<@!331935257647513611>",  # Jon
     "760": "<@!172823556143579136>",  # Nick
