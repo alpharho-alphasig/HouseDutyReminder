@@ -46,18 +46,18 @@ houseResidents = {
     "801": "<@!131197852188803073>",  # Rasin
     "802": "<@!251559872389316608>",  # Tyler
     "803": "<@!267311410990546945>",  # Eddie
-    "804": "<@!176172161281687552>",  #Ronny
-    "805": "<@!641486102296920067>",  #Marco
-    "806": "<@!319292710349570060>",  #Mike 
-    "807": "<@!762479320718508092>",  #Jake
-    "808": "<@!209100786980880385>",  #Kyle
-    "809": "<@!1140720304893743165>", #Jacob
-    "810": "<@!229788520569503746>", #Chris
-    "811": "<@!257200789141979146>", #Jayden
-    "812": "<@!787030554276659251>", #Bobby
-    "813": "<@!307256572852305922>", #Blade
-    "814": "<@!1108077393261891734>", #Coby
-    "815": "<@!318863344046178304>", #Victor
+    "804": "<@!176172161281687552>",  # Ronny
+    "805": "<@!641486102296920067>",  # Marco
+    "806": "<@!319292710349570060>",  # Mike
+    "807": "<@!762479320718508092>",  # Jake
+    "808": "<@!209100786980880385>",  # Kyle
+    "809": "<@!1140720304893743165>",  # Jacob
+    "810": "<@!229788520569503746>",  # Chris
+    "811": "<@!257200789141979146>",  # Jayden
+    "812": "<@!787030554276659251>",  # Bobby
+    "813": "<@!307256572852305922>",  # Blade
+    "814": "<@!1108077393261891734>",  # Coby
+    "815": "<@!318863344046178304>",  # Victor
 }
 
 # Make sure the folder passed is correct
@@ -114,18 +114,25 @@ if Path(basePath + "samePathAsLastWeek").exists():
 kitchenCleanup = {}
 weeklyDuties = {}
 
+
+def substringBefore(s: str, delim: str):
+    i = s.find(delim)
+    return s[:i] if i != -1 else s
+
+
 # Pull all the tables out of the documents
 doc = Document(folderPath.joinpath(newestFile))
 tables = doc.tables
 for table in tables:
     rows = table.rows
     if len(rows) > 1:
-        if rows[1].cells[0].text[-3:].lower() == "day":  # If the left cell on row 2 ends with day
+        day = substringBefore(rows[1].cells[0].text, " ")
+        if day[-3:].lower() == "day":  # If the left cell on row 2 ends with day
             # Kitchen cleaning
             duties = rows[1:]
             for duty in duties:
                 cells = duty.cells
-                day = cells[0].text
+                day = substringBefore(cells[0].text, " ")
                 # Sort the duties by roster number
                 responsible = sorted([cell.text or cell for cell in cells[1:3]])
                 kitchenCleanup[day] = [houseResidents.get(cell) or cell for cell in responsible]
