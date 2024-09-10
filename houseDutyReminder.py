@@ -112,7 +112,7 @@ if Path(basePath + "lastPath").exists() and today == "Tuesday":
         lastPath = lastPathFile.read().strip()
         if lastPath == str(newestFile):
             open(basePath + "samePathAsLastWeek", "w+").close()  # Create the samePathAsLastWeek file.
-        else:
+        elif Path(basePath + "samePathAsLastWeek").exists():
             remove(basePath + "samePathAsLastWeek")
 
 if Path(basePath + "samePathAsLastWeek").exists():
