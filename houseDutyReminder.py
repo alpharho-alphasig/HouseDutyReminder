@@ -6,96 +6,52 @@ from sys import exit, argv
 from docx import Document
 from requests import post
 from datetime import datetime
+from urllib.parse import quote as urlencode
+import requests
+from xml.etree import ElementTree
 import json
 
-# If you're updating this script for the new semester, change these two variables!
-folderPath = Path(
-    "/zpool/docker/volumes/nextcloud_aio_nextcloud_data/_data/admin/files/"
-    "NewDrive/ALPHA SIG GENERAL/02_COMMITTEES/07_HOUSING/WEEKLY DUTIES/2024_FALL")
-houseResidents = {
-    "741": "<@!331935257647513611>",  # Jon
-    "760": "<@!172823556143579136>",  # Nick
-    "762": "<@!402626429692543006>",  # Colton
-    "763": "<@!110120636445114368>",  # Vinuth
-    "766": "<@!267153432211750912>",  # Sergei
-    "768": "<@!171062832870326273>",  # Zach
-    "774": "<@!81999376616009728>",  # Peter
-    "775": "<@!128535042111569921>",  # David
-    "776": "<@!212611379058835456>",  # Adrian
-    "777": "<@!974419797989285888>",  # Gabe
-    "778": "<@!113728654176944136>",  # Tim
-    "779": "<@!171470084101898240>",  # Evan
-    "780": "<@!302822566614138880>",  # Martin
-    "781": "<@!544310490357170177>",  # George
-    "782": "<@!296825744544366592>",  # Monkey
-    "783": "<@!162350127372173312>",  # Monti
-    "787": "<@!694206889646620683>",  # Justin
-    "788": "<@!143380850556403712>",  # Adam
-    "789": "<@!174917188367417344>",  # Shane
-    "790": "<@!199253257091022849>",  # Luis
-    "791": "<@!690007038696489191>",  # John
-    "792": "<@!276489852244197376>",  # Will
-    "793": "<@!430179868060418058>",  # Malcolm
-    "794": "<@!387421780815642625>",  # Kendall
-    "795": "<@!445356465088364554>",  # Sai
-    "796": "<@!111249399836860416>",  # Yezen
-    "797": "<@!110168137667747840>",  # Akhil
-    "798": "<@!392842218211377162>",  # Joey
-    "799": "<@!230285108110688257>",  # Leo
-    "800": "<@!263490770558779394>",  # Ian
-    "801": "<@!131197852188803073>",  # Rasin
-    "802": "<@!251559872389316608>",  # Tyler
-    "803": "<@!267311410990546945>",  # Eddie
-    "804": "<@!176172161281687552>",  # Ronny
-    "805": "<@!641486102296920067>",  # Marco
-    "806": "<@!319292710349570060>",  # Mike
-    "807": "<@!762479320718508092>",  # Jake
-    "808": "<@!209100786980880385>",  # Kyle
-    "809": "<@!1140720304893743165>",  # Jacob
-    "810": "<@!229788520569503746>",  # Chris
-    "811": "<@!257200789141979146>",  # Jayden
-    "812": "<@!787030554276659251>",  # Bobby
-    "813": "<@!307256572852305922>",  # Blade
-    "814": "<@!1108077393261891734>",  # Coby
-    "815": "<@!318863344046178304>",  # Victor
-    "816": "<@!415197373619372033>",  # Josh
-    "817": "<@!1094045264219750470>",  # Adrian
-    "818": "<@!593485316048945154>",  # Jerry
-    "819": "<@!254041051285684226>",  # Alex
-    "820": "<@!220612714119168000>",  # Lucian
-    
-    
-    
-    
-}
+with open("/opt/bots/config.json", "r") as configFile:
+    config = json.load(configFile)
 
+
+houseResidents = config["houseResidents"]
 # Make sure the folder passed is correct
 basePath = "/opt/bots/HouseDutyReminder/"
-if not folderPath.exists():
-    print("No folder found at \"{}\".".format(folderPath))
-    exit(1)
 
+# The NextCloud API requires the filepaths to be URL encoded.
+dutiesPath = urlencode(dutiesPath)
 
-def readAndClose(filePath):
-    with open(filePath, "r") as f:
-        s = f.read().strip()
-    return s
+# See https://docs.nextcloud.com/server/19/developer_manual/client_apis/WebDAV/basic.html for info on the NC API.
+# Request a list of all the files in the duty sheet folder with all of their file IDs.
+dutiesResponse = requests.request(
+    method="PROPFIND",
+    url=ncURL + "remote.php/dav/files/bot" + dutiesPath,
+    auth=("bot", password),
+    data="""<?xml version="1.0" encoding="UTF-8"?>
+  <d:propfind xmlns:d="DAV:">
+    <d:prop xmlns:oc="http://owncloud.org/ns">
+      <oc:fileid/>
+    </d:prop>
+  </d:propfind>"""
+)
+response = dutiesResponse.text
+responseXML = ElementTree.fromstring(response)
+# Pull out the file IDs from the response and associate them with their matching file name.
+fileIDs = {}
+files = responseXML.findall("{DAV:}response")
+for file in files:
+    fileID = None
+    filePath = file.find("{DAV:}href").text
+    for child in file.find("{DAV:}propstat").iter():
+        if child.tag.endswith("fileid"):
+            fileID = child.text
+            break
+    if fileID is not None:
+        fileIDs[fileID] = filePath[25:]
 
-
-def lastSubstringAfter(s, delimiter):
-    lastIndex = s.rfind(delimiter)
-    if lastIndex == -1:
-        return s
-    return s[lastIndex + 1:]
-
-
-# Find the newest house duty file
-files = []
-for file in listdir(folderPath):
-    currentFilePath = folderPath.joinpath(str(file))
-    if currentFilePath.suffix == ".docx":
-        files.append((int(lastSubstringAfter(str(currentFilePath.stem), "_")), currentFilePath))
-newestFile = max(files)[1]
+fileID = max(fileIDs.keys())
+newestDutySheet = fileIDs[fileID]
 
 test = len(argv) > 1 and argv[1] == "test"
 
@@ -110,7 +66,7 @@ today = days[now.weekday()]
 if Path(basePath + "lastPath").exists() and today == "Tuesday":
     with open(basePath + "lastPath", "r") as lastPathFile:
         lastPath = lastPathFile.read().strip()
-        if lastPath == str(newestFile):
+        if lastPath == str(newestDutySheet):
             open(basePath + "samePathAsLastWeek", "w+").close()  # Create the samePathAsLastWeek file.
         elif Path(basePath + "samePathAsLastWeek").exists():
             remove(basePath + "samePathAsLastWeek")
@@ -130,7 +86,7 @@ def substringBefore(s: str, delim: str):
 
 
 # Pull all the tables out of the documents
-doc = Document(folderPath.joinpath(newestFile))
+doc = Document(newestDutySheet)
 tables = doc.tables
 for table in tables:
     rows = table.rows
@@ -160,7 +116,7 @@ for table in tables:
 lastPathFile = open(basePath + "lastPath", "w+")
 
 with lastPathFile:
-    print(newestFile, file=lastPathFile)
+    print(newestDutySheet, file=lastPathFile)
 
 msg = ""
 if today == "Tuesday":
@@ -170,7 +126,7 @@ if today == "Tuesday":
     )
 msg += "{}, you have daily kitchen cleanup today!".format(" and ".join(kitchenCleanup[today]))
 
-webhookUrl = readAndClose(basePath + "URLs/discordWebhook.txt")
+webhookUrl = config["discordWebhookURL"]
 
 print(msg)
 if not test:
