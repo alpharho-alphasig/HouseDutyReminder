@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
-from os import listdir, remove
+from os import remove
 from pathlib import Path
 from sys import exit, argv
 from docx import Document
 from requests import post
 from datetime import datetime
 from urllib.parse import quote as urlencode
+from tempfile import NamedTemporaryFile
 import requests
 from xml.etree import ElementTree
 import json
@@ -18,6 +19,9 @@ with open("/opt/bots/config.json", "r") as configFile:
 houseResidents = config["houseResidents"]
 # Make sure the folder passed is correct
 basePath = "/opt/bots/HouseDutyReminder/"
+dutiesPath = config["weeklyDutiesPath"] + config["currentSemester"]["year"] + "_" + config["currentSemester"]["season"]
+ncURL = config["nextcloudURL"]
+password = config["botPassword"]
 
 # The NextCloud API requires the filepaths to be URL encoded.
 dutiesPath = urlencode(dutiesPath)
@@ -51,7 +55,11 @@ for file in files:
         fileIDs[fileID] = filePath[25:]
 
 fileID = max(fileIDs.keys())
-newestDutySheet = fileIDs[fileID]
+newestDutySheetPath = fileIDs[fileID]
+newestDutySheet = requests.get(
+    url=ncURL + "remote.php/dav/files/bot" + newestDutySheetPath,
+    auth=("bot", password)
+).content
 
 test = len(argv) > 1 and argv[1] == "test"
 
@@ -84,9 +92,10 @@ def substringBefore(s: str, delim: str):
     i = s.find(delim)
     return s[:i] if i != -1 else s
 
-
 # Pull all the tables out of the documents
-doc = Document(newestDutySheet)
+docxFile = NamedTemporaryFile()
+docxFile.write(newestDutySheet)
+doc = Document(docxFile)
 tables = doc.tables
 for table in tables:
     rows = table.rows
@@ -112,6 +121,7 @@ for table in tables:
                 if responsible[0] == responsible[1]:
                     responsible.pop()
                 weeklyDuties[duty] = [houseResidents.get(cell) or cell for cell in responsible]
+docxFile.close()
 
 lastPathFile = open(basePath + "lastPath", "w+")
 
@@ -126,7 +136,7 @@ if today == "Tuesday":
     )
 msg += "{}, you have daily kitchen cleanup today!".format(" and ".join(kitchenCleanup[today]))
 
-webhookUrl = config["discordWebhookURL"]
+webhookUrl = config["houseDutyReminderURL"]
 
 print(msg)
 if not test:
