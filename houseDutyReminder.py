@@ -1,16 +1,15 @@
 #!/usr/bin/python3
 
-from os import remove
-from pathlib import Path
+import json
+from datetime import datetime, timedelta
 from sys import exit, argv
+from tempfile import NamedTemporaryFile
+from urllib.parse import quote as urlencode
+from xml.etree import ElementTree
+
+import requests
 from docx import Document
 from requests import post
-from datetime import datetime, timedelta
-from urllib.parse import quote as urlencode
-from tempfile import NamedTemporaryFile
-import requests
-from xml.etree import ElementTree
-import json
 
 with open("/opt/bots/config.json", "r") as configFile:
     config = json.load(configFile)
@@ -75,8 +74,8 @@ today = days[now.weekday()]
 # Check if it's the same sheet as last week, if so, do nothing.
 # This means the bot doesn't need to be manually disabled between semesters.
 
-beginningOfWeek = now - timedelta(days=now.weekday())
-if lastModifiedTime < beginningOfWeek:
+lastWednesday = now - timedelta(days=now.weekday() + 4)
+if lastModifiedTime < lastWednesday:
     print("Duty sheet not for this week. Exiting.")
     exit(0)
 
