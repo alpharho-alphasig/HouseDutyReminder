@@ -5,7 +5,7 @@ from pathlib import Path
 from sys import exit, argv
 from docx import Document
 from requests import post
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import quote as urlencode
 from tempfile import NamedTemporaryFile
 import requests
@@ -19,7 +19,7 @@ with open("/opt/bots/config.json", "r") as configFile:
 houseResidents = config["houseResidents"]
 # Make sure the folder passed is correct
 basePath = "/opt/bots/HouseDutyReminder/"
-dutiesPath = config["weeklyDutiesPath"] + config["currentSemester"]["year"] + "_" + config["currentSemester"]["season"]
+dutiesPath = config["weeklyDutiesPath"] + "/" + config["currentSemester"]["year"] + "_" + config["currentSemester"]["season"]
 ncURL = config["nextcloudURL"]
 password = config["botPassword"]
 
@@ -34,8 +34,9 @@ dutiesResponse = requests.request(
     auth=("bot", password),
     data="""<?xml version="1.0" encoding="UTF-8"?>
   <d:propfind xmlns:d="DAV:">
-    <d:prop xmlns:oc="http://owncloud.org/ns">
+    <d:prop xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
       <oc:fileid/>
+      <d:getlastmodified/>
     </d:prop>
   </d:propfind>"""
 )
@@ -46,16 +47,20 @@ fileIDs = {}
 files = responseXML.findall("{DAV:}response")
 for file in files:
     fileID = None
+    lastModified = None
     filePath = file.find("{DAV:}href").text
     for child in file.find("{DAV:}propstat").iter():
         if child.tag.endswith("fileid"):
             fileID = child.text
+        elif child.tag.endswith("lastmodified"):
+            lastModified = child.text
+        if fileID is not None and lastModified is not None:
             break
     if fileID is not None:
-        fileIDs[fileID] = filePath[25:]
+        fileIDs[fileID] = (filePath[25:], datetime.strptime(lastModified, "%a, %d %b %Y %H:%M:%S %Z"))
 
 fileID = max(fileIDs.keys())
-newestDutySheetPath = fileIDs[fileID]
+newestDutySheetPath, lastModifiedTime = fileIDs[fileID]
 newestDutySheet = requests.get(
     url=ncURL + "remote.php/dav/files/bot" + newestDutySheetPath,
     auth=("bot", password)
@@ -70,17 +75,9 @@ today = days[now.weekday()]
 # Check if it's the same sheet as last week, if so, do nothing.
 # This means the bot doesn't need to be manually disabled between semesters.
 
-# If it's Tuesday, check if the path's the same as last week and create/remove the samePathAsLastWeek file accordingly.
-if Path(basePath + "lastPath").exists() and today == "Tuesday":
-    with open(basePath + "lastPath", "r") as lastPathFile:
-        lastPath = lastPathFile.read().strip()
-        if lastPath == str(newestDutySheet):
-            open(basePath + "samePathAsLastWeek", "w+").close()  # Create the samePathAsLastWeek file.
-        elif Path(basePath + "samePathAsLastWeek").exists():
-            remove(basePath + "samePathAsLastWeek")
-
-if Path(basePath + "samePathAsLastWeek").exists():
-    print("Same file as last week. Exiting.")
+beginningOfWeek = now - timedelta(days=now.weekday())
+if lastModifiedTime < beginningOfWeek:
+    print("Duty sheet not for this week. Exiting.")
     exit(0)
 
 # These will store the duties later.
@@ -122,11 +119,6 @@ for table in tables:
                     responsible.pop()
                 weeklyDuties[duty] = [houseResidents.get(cell) or cell for cell in responsible]
 docxFile.close()
-
-lastPathFile = open(basePath + "lastPath", "w+")
-
-with lastPathFile:
-    print(newestDutySheet, file=lastPathFile)
 
 msg = ""
 if today == "Tuesday":
