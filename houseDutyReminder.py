@@ -76,7 +76,7 @@ today = days[now.weekday()]
 # This means the bot doesn't need to be manually disabled between semesters.
 
 lastWednesday = now - timedelta(days=now.weekday() + 4)
-delta = lastModifiedTime < lastWednesday
+delta = lastModifiedTime - lastWednesday
 if delta >= timedelta(days = 7):
     post(webhookUrl, data=json.dumps({"content": "Either the semester is over, or <@&626093603286155264> forgot to make the duty sheet 👀"}), headers={"Content-Type": "application/json"})
     exit(0)
