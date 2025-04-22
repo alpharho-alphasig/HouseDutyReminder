@@ -21,6 +21,7 @@ basePath = "/opt/bots/HouseDutyReminder/"
 dutiesPath = config["weeklyDutiesPath"] + "/" + config["currentSemester"]["year"] + "_" + config["currentSemester"]["season"]
 ncURL = config["nextcloudURL"]
 password = config["botPassword"]
+webhookUrl = config["houseDutyReminderURL"]
 
 # The NextCloud API requires the filepaths to be URL encoded.
 dutiesPath = urlencode(dutiesPath)
@@ -75,7 +76,11 @@ today = days[now.weekday()]
 # This means the bot doesn't need to be manually disabled between semesters.
 
 lastWednesday = now - timedelta(days=now.weekday() + 4)
-if lastModifiedTime < lastWednesday:
+delta = lastModifiedTime < lastWednesday
+if delta >= timedelta(days = 7):
+    post(webhookUrl, data=json.dumps({"content": "Either the semester is over, or <@&626093603286155264> forgot to make the duty sheet 👀"}), headers={"Content-Type": "application/json"})
+    exit(0)
+elif delta >= timedelta(days = 13):
     print("Duty sheet not for this week. Exiting.")
     exit(0)
 
@@ -127,7 +132,6 @@ if today == "Tuesday":
     )
 msg += "{}, you have daily kitchen cleanup today!".format(" and ".join(kitchenCleanup[today]))
 
-webhookUrl = config["houseDutyReminderURL"]
 
 print(msg)
 if not test:
